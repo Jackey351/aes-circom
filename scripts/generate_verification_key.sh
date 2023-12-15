@@ -1,10 +1,11 @@
 #!/bin/bash
 # Copyright © 2022, Electron Labs
 
-readonly nodex="$HOME/bin/usr/local/bin/node"
+readonly nodex="node"
 readonly node_params="--trace-gc --trace-gc-ignore-scavenger --max-old-space-size=2048000 --initial-old-space-size=2048000 --no-global-gc-scheduling --no-incremental-marking --max-semi-space-size=1024 --initial-heap-size=2048000 --expose-gc"
 readonly builddir="build"
-readonly snarkjs="$HOME/snarkjs/cli.js"
+readonly snarkjs="snarkjs"
+readonly verifierdir="contracts/verifiers"
 
 function command_exists() {
         if ! command -v "$1" &> /dev/null
@@ -21,6 +22,7 @@ function check_circuit_exists() {
         fi
 }
 
+
 # $1 -> Main circuit file
 
 echo "Start generating verification key!"
@@ -29,7 +31,8 @@ echo "Start generating verification key!"
 command_exists "circom"
 command_exists "snarkjs"
 
-check_circuit_exists "$1"
+# check_circuit_exists "$1"
+
 
 mkdir -p "$builddir"
 
@@ -39,6 +42,7 @@ echo "Total number of constraints: 2**$constraints"
 
 circom=$(basename "$1")
 circuit="${circom%%.*}"
+echo $circuit
 
 pushd "$builddir"
 ptau="powersOfTau28_hez_final_$constraints.ptau"
@@ -48,9 +52,14 @@ if ! test -f "$ptau"; then
         wget "https://hermez.s3-eu-west-1.amazonaws.com/$ptau"
 fi
 
-${nodex} ${node_params} ${snarkjs} groth16 setup ${circuit}.r1cs powersOfTau28_hez_final_${constraints}.ptau ${circuit}_0000.zkey
-${nodex} ${node_params} ${snarkjs} zkey contribute ${circuit}_0000.zkey ${circuit}_0001.zkey --name="Jinank Jain" -v
-${nodex} ${node_params} ${snarkjs} zkey export verificationkey ${circuit}_0001.zkey verification_key.json
+${snarkjs} groth16 setup ${circuit}.r1cs powersOfTau28_hez_final_${constraints}.ptau ${circuit}_0000.zkey
+${snarkjs} zkey contribute ${circuit}_0000.zkey ${circuit}_0001.zkey -v --entropy="1"
+${snarkjs} zkey export verificationkey ${circuit}_0001.zkey ${circuit}_vkey.json
+${snarkjs} zkey export solidityverifier ${circuit}_0001.zkey ${circuit}_verifier.sol
 popd
+
+sed -i -e "s/Groth16Verifier/${circuit}_verifier/g" ${builddir}/${circuit}_verifier.sol
+rm -r ${verifierdir}/${circuit}_verifier.sol
+cp ${builddir}/${circuit}_verifier.sol ${verifierdir}/${circuit}_verifier.sol
 
 echo "Done generating verification key: $builddir/verification_key.json!"

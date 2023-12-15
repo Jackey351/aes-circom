@@ -7,7 +7,8 @@
     "test": "test"
   },
   "scripts": {
-    "test": "node node_modules/mocha/bin/_mocha --timeout 1000000",
+    "build": "bash scripts/generate_verification_key.sh test/circuits/aes_256_ctr_test.circom & npx hardhat compile",
+    "test": "npx hardhat test test/aes_256_ctr.test.js",
     "lint-check": "eslint test/*.test.js",
     "lint": "eslint test/*.test.js --fix"
   },
@@ -22,7 +23,16 @@
   },
   "homepage": "https://github.com/Electron-Labs/aes_gcm-circom#readme",
   "devDependencies": {
-    "circom_tester": "0.0.11",
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^2.0.1",
+    "@nomiclabs/hardhat-ethers": "^2.0.0",
+    "@nomiclabs/hardhat-etherscan": "^3.0.0",
+    "@typechain/ethers-v5": "^10.1.0",
+    "@typechain/hardhat": "^6.1.2",
+    "@types/node": "^18.15.3",
+    "hardhat": "^2.12.6",
+    "typechain": "^8.1.0",
+    "circom_tester": "^0.0.20",
     "circomlib": "^2.0.3",
     "circomlibjs": "^0.1.2",
     "eslint": "^8.20.0",
