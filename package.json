@@ -7,8 +7,8 @@
     "test": "test"
   },
   "scripts": {
-    "build": "bash scripts/generate_verification_key.sh test/circuits/aes_256_ctr_test.circom & npx hardhat compile",
-    "test": "npx hardhat test test/aes_256_ctr.test.js",
+    "build": "bash scripts/generate_verification_key.sh test/circuits/aes_256_ctr_test.circom",
+    "test": "mocha test/aes_256_ctr.test.js --exit",
     "lint-check": "eslint test/*.test.js",
     "lint": "eslint test/*.test.js --fix"
   },

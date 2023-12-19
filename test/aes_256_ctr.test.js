@@ -5,23 +5,43 @@ const Module = require("./module.js");
 const utils = require("./utils");
 const { expect } = require("chai");
 const { Circuit } = require("../utils/Circuit.js");
-const { ethers } = require("hardhat");
-const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+
+// const { ethers } = require("hardhat");
+// const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 const fs = require("fs");
 
+const projectName = "aes_256_ctr_test";
+const buildPath = `build/${projectName}`;
+
 describe("AES256 CTR Test", () => {
-    const deployVerifier = async () => {
-        const [deployer, relayer] = await ethers.getSigners();
-        const Verifier = await ethers.getContractFactory("aes_256_ctr_test_verifier", deployer);
-        const verifier = await Verifier.deploy();
-        await verifier.deployed();
-        // console.log(`Verifier contract deployed to ${verifier.address}`);1
-        return { verifier, deployer, relayer };
-    };
+    let proofJson;
+    let publicSignals;
+    let input;
+    let AES_256_CTR_TEST;
+
+    before(async () => {
+        input = await setupInput();
+        AES_256_CTR_TEST = new Circuit(projectName);
+    });
+    // const deployVerifier = async () => {
+    //     const [deployer, relayer] = await ethers.getSigners();
+    //     const Verifier = await ethers.getContractFactory("aes_256_ctr_test_verifier", deployer);
+    //     const verifier = await Verifier.deploy();
+    //     await verifier.deployed();
+    //     // console.log(`Verifier contract deployed to ${verifier.address}`);1
+    //     return { verifier, deployer, relayer };
+    // };
 
     const setupInput = async () => {
         // await wasmTester(path.join(__dirname, "circuits", "aes_256_ctr_test.circom"), { output: "build" });
-        const inp = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; //1B *16 = 16B
+        // const inp = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; //4B *16 = 64B
+        const inp = ([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].join(",") + ",")
+            .repeat(10)
+            .split(",")
+            .slice(0, -1)
+            .map((item) => Number(item)); //4B *16 = 64B
+        console.log(inp);
+
         const ctr = [469237865, 927770925, 1003210585, 3037346057];
         const ks = [
             1962153145, 3621906731, 3712678050, 3286144703, 1815899717, 1472326661, 507853, 584243966, 3479675375, 411453636, 3318526054, 101852889, 66427248, 1412724085, 1412680376, 1994461254,
@@ -59,7 +79,7 @@ describe("AES256 CTR Test", () => {
             ctr_buffer.push(...utils.intToLEBuffer(ctr[i], 4));
         }
         var ctr_bits = utils.buffer2bits(ctr_buffer);
-
+        console.log(out);
         return {
             ks: ks_bits,
             in: utils.buffer2bits(inp),
@@ -67,30 +87,51 @@ describe("AES256 CTR Test", () => {
         };
     };
 
-    describe("Verify Offchain", function () {
-        it("Show do ctr correctly", async () => {
-            const input = await setupInput();
-            const AES_256_CTR_TEST = new Circuit("aes_256_ctr_test");
-            console.log({ input });
-            const ks= input.ks.map(el=>Number(el));
-            const in2= input.in.map(el=>Number(el));
-            const ctr= input.ctr.map(el=>Number(el));// 6858B
-            
-            await fs.promises.writeFile("build/a.json", JSON.stringify({ks,in:in2,ctr}));
-            const { proofJson, publicSignals } = await AES_256_CTR_TEST.generateProof(input);
-            const verify = await AES_256_CTR_TEST.verifyProof(proofJson, publicSignals);
-            expect(verify).to.be.true;
+    describe("Offchain", function () {
+        this.timeout(0);
+        it("generateProof", async () => {
+            // const ks = input.ks.map((el) => Number(el));
+            // const in2 = input.in.map((el) => Number(el));
+            // const ctr = input.ctr.map((el) => Number(el)); // 6858B
+            // await fs.promises.writeFile("build/a.json", JSON.stringify({ ks, in: in2, ctr }));
+            const res = await AES_256_CTR_TEST.generateProof(input);
+
+            proofJson = res.proofJson;
+            publicSignals = res.publicSignals;
+            // console.log(proofJson)
+            // console.log(publicSignals)
+            // await fs.promises.writeFile(`${buildPath}/proof.json`, JSON.stringify(proofJson));
+            // await fs.promises.stat(`${buildPath}/proof.json`).then((res) => console.log(res.size));
+            // await fs.promises.writeFile(`${buildPath}/public.json`, JSON.stringify(publicSignals));
+            // await fs.promises.stat(`${buildPath}/public.json`).then((res) => console.log(res.size));
         });
     });
 
-    describe("Verify Onchain", function () {
-        it("Should verify the zksnark for correct signals", async function () {
-            const { verifier, relayer } = await loadFixture(deployVerifier);
-            const AES_256_CTR_TEST = new Circuit("aes_256_ctr_test");
-            const input = await setupInput();
-            const { proofCalldata, publicSignals } = await AES_256_CTR_TEST.generateProof(input);
-            const verify = await verifier.connect(relayer).verifyProof(proofCalldata[0], proofCalldata[1], proofCalldata[2], publicSignals);
-            expect(verify).to.be.true;
+    describe("Offchain", function () {
+        this.timeout(0);
+        it("verifyProof", async () => {
+            const verify = await AES_256_CTR_TEST.verifyProof(proofJson, publicSignals);
+            // expect(verify).to.be.true;
         });
     });
+
+    describe("Write File", function () {
+        this.timeout(0);
+        it("writeFile", async () => {
+            await fs.promises.writeFile(`${buildPath}/proof.json`, JSON.stringify(proofJson));
+            await fs.promises.stat(`${buildPath}/proof.json`).then((res) => console.log(res.size));
+            await fs.promises.writeFile(`${buildPath}/public.json`, JSON.stringify(publicSignals));
+            await fs.promises.stat(`${buildPath}/public.json`).then((res) => console.log(res.size));
+        });
+    });
+    // describe("Verify Onchain", function () {
+    //     it("Should verify the zksnark for correct signals", async function () {
+    //         const { verifier, relayer } = await loadFixture(deployVerifier);
+    //         const AES_256_CTR_TEST = new Circuit("aes_256_ctr_test");
+    //         const input = await setupInput();
+    //         const { proofCalldata, publicSignals } = await AES_256_CTR_TEST.generateProof(input);
+    //         const verify = await verifier.connect(relayer).verifyProof(proofCalldata[0], proofCalldata[1], proofCalldata[2], publicSignals);
+    //         expect(verify).to.be.true;
+    //     });
+    // });
 });

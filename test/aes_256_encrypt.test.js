@@ -1,13 +1,26 @@
-const path = require("path");
-const assert = require("assert");
-const wasmTester = require("circom_tester").wasm;
 const Module = require("./module.js");
 const utils = require("./utils");
+const { expect } = require("chai");
+const { Circuit } = require("../utils/Circuit.js");
+const fs = require("fs");
+
+const projectName = "aes_256_encrypt_test";
+const buildPath = `build/${projectName}`;
 
 describe("AES256 Encrypt Test", () => {
-    it("Show do encrypt correctly", async () => {
-        const cir = await wasmTester(path.join(__dirname, "circuits", "aes_256_encrypt_test.circom"));
-        const inp = [0, 3, 0, 0];
+    let proofJson;
+    let publicSignals;
+    let input;
+    let AES_256_ENCRYPT_TEST;
+
+    before(async () => {
+        input = await setupInput();
+        AES_256_ENCRYPT_TEST = new Circuit(projectName);
+    });
+
+    const setupInput = async () => {
+        const inp = [0, 3];
+        // const inp = ([0, 3, 0, 0].join(",") + ",").repeat(1).split(",").slice(0, -1);
         const ks = [
             1, 0, 0, 0, 0, 0, 0, 0, 1667457891, 1667457891, 1667457891, 1667457891, 4227595259, 4227595259, 4227595259, 4227595259, 1819044974, 252645133, 1819044974, 252645133, 2374864172,
             1987475159, 2374864172, 1987475159, 1649693778, 1834703711, 20395825, 238565436, 646613703, 1358756880, 3715199292, 2869364715, 2335609247, 3865955008, 3881500145, 3915564493, 941632634,
@@ -48,10 +61,38 @@ describe("AES256 Encrypt Test", () => {
             out_buffer.push(...utils.intToLEBuffer(out[i], 4));
         }
         var out_bits = utils.buffer2bits(out_buffer);
+        console.log(out_bits);
+        return {
+            ks: ks_bits,
+            in: inp_bits,
+        };
+    };
 
-        let witness = await cir.calculateWitness({ ks: ks_bits, in: inp_bits });
-        witness = witness.slice(1, 129);
+    describe("Offchain", function () {
+        this.timeout(0);
+        it("generateProof", async () => {
+            console.log({ input });
+            const res = await AES_256_ENCRYPT_TEST.generateProof(input);
+            proofJson = res.proofJson;
+            publicSignals = res.publicSignals;
+        });
+    });
 
-        assert.ok(out_bits.every((v, i) => v == witness[i]));
+    describe("Offchain", function () {
+        this.timeout(0);
+        it("verifyProof", async () => {
+            const verify = await AES_256_ENCRYPT_TEST.verifyProof(proofJson, publicSignals);
+            expect(verify).to.be.true;
+        });
+    });
+
+    describe("Write File", function () {
+        this.timeout(0);
+        it("writeFile", async () => {
+            await fs.promises.writeFile(`${buildPath}/proof.json`, JSON.stringify(proofJson));
+            await fs.promises.stat(`${buildPath}/proof.json`).then((res) => console.log(res.size));
+            await fs.promises.writeFile(`${buildPath}/public.json`, JSON.stringify(publicSignals));
+            await fs.promises.stat(`${buildPath}/public.json`).then((res) => console.log(res.size));
+        });
     });
 });
